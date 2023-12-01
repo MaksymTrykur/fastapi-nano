@@ -1,0 +1,107 @@
+namespace: fastapi-nano
+
+fnano:
+  defines: runnable
+  metadata:
+    name: fnano
+    description: Backend FastAPI application running with gunicorn and uvicorn
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    fnano:
+      image: env-3283.registry.local/fnano:master-33fd73b
+      build: .
+      dockerfile: dockerfiles/python311/Dockerfile
+  services:
+    gunicorn-port:
+      description: Port for the gunicorn server within the container
+      container: fnano
+      port: 5000
+      host-port: 5000
+      publish: false
+      protocol: tcp
+    service-port:
+      description: >-
+        Port exposed by the service to the outside world, as configured in
+        docker-compose.yml
+      container: fnano
+      port: 6969
+      host-port: 6969
+      publish: true
+      protocol: tcp
+  connections:
+    reverse-proxy:
+      target: fastapi-nano/caddy
+      service: https
+      optional: true
+      description: fnano service is reverse proxied by caddy
+  variables:
+    api-username:
+      env: API_USERNAME
+      type: string
+      value: user
+      description: Username for API authentication
+    api-password:
+      env: API_PASSWORD
+      type: string
+      value: pass123
+      description: Password for API authentication
+    api-secret-key:
+      env: API_SECRET_KEY
+      type: string
+      value: s3cr3tK3y
+      description: Secret key for API encryption
+    api-algorithm:
+      env: API_ALGORITHM
+      type: string
+      value: HS256
+      description: Algorithm used for API encryption
+    api-access-token-expire-minutes:
+      env: API_ACCESS_TOKEN_EXPIRE_MINUTES
+      type: int
+      value: 30
+      description: Expiration time in minutes for API access tokens
+
+caddy:
+  defines: runnable
+  metadata:
+    name: caddy
+    description: Web server and reverse proxy forwarding requests to 'fnano'
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    caddy:
+      image: env-3283.registry.local/caddy:master-33fd73b
+      build: .
+      dockerfile: Dockerfile.caddy
+  services:
+    http:
+      description: HTTP traffic
+      container: caddy
+      port: $port
+      host-port: $port
+      publish: true
+      protocol: tcp
+    https:
+      description: HTTPS traffic
+      container: caddy
+      port: $port
+      host-port: $port
+      publish: true
+      protocol: tcp
+  connections:
+    reverse-proxy-to-fnano:
+      target: fastapi-nano/fnano
+      service: service-port
+      optional: true
+      description: Caddy acts as a reverse proxy to the fnano service
+  variables:
+    port:
+      env: PORT
+      type: int
+      value: 443
+      description: The port on which the caddy server listens
+
+stack:
+  defines: group
+  members:
+    - fastapi-nano/fnano
+    - fastapi-nano/caddy
